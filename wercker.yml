@@ -6,7 +6,7 @@ build:
         code: |
           apt-get update -y
           apt-get install -y r-cran-RODBC
-          Rscript -e 'devtools::install_bitbucket("thierry_onkelinx/n2khelper@develop")'
+          Rscript -e 'devtools::install_bitbucket("thierry_onkelinx/n2khelper@issue_5")'
           Rscript -e 'devtools::install_bitbucket("thierry_onkelinx/n2kanalysis@develop")'
     - jimhester/r-dependencies
     - jimhester/r-check

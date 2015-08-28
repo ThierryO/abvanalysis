@@ -2,7 +2,7 @@
 #' @inheritParams prepare_analysis_dataset
 #' @inheritParams prepare_dataset
 #' @export
-#' @importFrom n2khelper check_single_strictly_positive_integer check_path list_files_git git_sha
+#' @importFrom n2khelper check_path list_files_git git_sha pull_git
 #' @importFrom n2kanalysis status
 #' @importFrom plyr d_ply
 #' @importFrom assertthat assert_that is.count
@@ -20,6 +20,7 @@ prepare_analysis <- function(
     path <- check_path(paste0(analysis.path, "/"), type = "directory")
   }
   analysis.path <- path
+  pull_git(x = raw.connection)
 
   observation <- read_delim_git(
     file = "observation.txt",
