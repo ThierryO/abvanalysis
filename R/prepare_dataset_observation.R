@@ -2,7 +2,8 @@
 #' @inheritParams prepare_dataset
 #' @export
 #' @importFrom assertthat assert_that is.count
-#' @importFrom n2khelper check_single_strictly_positive_integer odbc_get_multi_id connect_result
+#' @importFrom n2khelper read_delim_git odbc_get_multi_id connect_result
+#' @importFrom dplyr %>% select_ mutate_ inner_join
 #' @importFrom n2kanalysis mark_obsolete_dataset
 #' @importFrom RODBC odbcClose
 prepare_dataset_observation <- function(
@@ -15,6 +16,21 @@ prepare_dataset_observation <- function(
     source.channel = source.channel,
     result.channel = result.channel
   )
+  stratum <- read_delim_git(
+    file = "habitat.txt",
+    connection = attribute.connection
+  )
+  check_dataframe_variable(
+    df = stratum,
+    variable = c("ExternalCode", "Stratum"),
+    name = "habitat.txt"
+  )
+  observation <- stratum %>%
+    select_(~ExternalCode, ~Stratum) %>%
+    mutate_(Stratum = ~ factor(Stratum)) %>%
+    group_by_(~Stratum) %>%
+    mutate_(Weight = ~n_distinct(ExternalCode)) %>%
+    inner_join(observation, by = "ExternalCode")
   data.field.type <- odbc_get_multi_id(
     data = data.frame(Description = "Observation"),
     id.field = "ID",
@@ -42,11 +58,6 @@ prepare_dataset_observation <- function(
   #   - check for observations < 2007
   #   - check for multiple observations per sublocation - time combination
   #   - check for observations outside the 1/3 - 15/7 range/
-  observation <- calculate_weight(
-    observation = observation,
-    attribute.connection = attribute.connection,
-    result.channel = result.channel
-  )
 
   # store the locations
   result.datasource <-  result_datasource_id(result.channel = result.channel)
@@ -62,7 +73,7 @@ prepare_dataset_observation <- function(
   data.field <- data.frame(
     DatasourceID = c(
       result.datasource,
-      unique(observation[, "DatasourceID"])
+      unique(observation$DatasourceID)
     ),
     TableName = c("Location", "tblUTM1"),
     PrimaryKey = c("ID", "UTM1_CDE"),
@@ -209,7 +220,7 @@ prepare_dataset_observation <- function(
     connection = raw.connection
   )
   observation.sha <- write_delim_git(
-    x = observation[, c("DatasourceID", "ObservationID", "LocationID", "SubLocationID", "Year", "Period", "Weight", "Stratum")],
+    x = observation[, c("DatasourceID", "ObservationID", "Stratum", "LocationID", "SubLocationID", "Year", "Period")],
     file = "observation.txt",
     connection = raw.connection
   )
@@ -231,5 +242,6 @@ prepare_dataset_observation <- function(
   )
   mark_obsolete_dataset(channel = result.channel)
 
+  observation$Cycle <- (observation$Year - min(observation$Year)) %/% 3
   return(observation)
 }
