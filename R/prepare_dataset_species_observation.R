@@ -6,6 +6,7 @@
 #' @inheritParams prepare_dataset
 #' @export
 #' @importFrom n2khelper check_dataframe_variable odbc_get_id  check_single_strictly_positive_integer odbc_get_multi_id get_sha1
+#' @importFrom assertthat assert_that is.count
 #' @importFrom n2kanalysis get_analysis_version
 #' @importFrom RODBC sqlQuery
 prepare_dataset_species_observation <- function(
@@ -24,8 +25,8 @@ prepare_dataset_species_observation <- function(
     variable = c("ObservationID", "SubLocationID"),
     name = "observation"
   )
-  scheme.id <- check_single_strictly_positive_integer(scheme.id, name = "scheme.id")
-  
+  assert_that(is.count(scheme.id))
+
   import.date <- Sys.time()
   observation.species <- read_observation_species(
     species.id = this.species$ExternalCode,
