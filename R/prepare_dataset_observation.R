@@ -200,7 +200,7 @@ prepare_dataset_observation <- function(
       observation$Year,
       observation$Period
     ),
-    c("DatasourceID", "ObservationID", "Stratum", "LocationID", "SubLocationID", "Year", "Period", "Weight", "Stratum")
+    c("DatasourceID", "ObservationID", "Stratum", "LocationID", "SubLocationID", "Year", "Period", "Weight")
   ]
 
   location.group.location.sha <- write_delim_git(
