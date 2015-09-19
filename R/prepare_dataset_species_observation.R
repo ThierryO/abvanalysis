@@ -33,14 +33,14 @@ prepare_dataset_species_observation <- function(
     source.channel = source.channel
   )
   if (nrow(observation.species) == 0) {
-    observation.species <- NULL
+    relevant <- NULL
   } else {
-    observation.species <- select_relevant(observation, observation.species)
+    relevant <- select_relevant(observation, observation.species)
   }
 
   filename <- paste0(this.species$SpeciesGroupID, ".txt")
-  if (is.null(observation.species)) {
 
+  if (is.null(relevant)) {
     observation.species.sha <- NA
     status.id <- odbc_get_multi_id(
       data = data.frame(Description = "insufficient data"),
@@ -52,6 +52,7 @@ prepare_dataset_species_observation <- function(
       select = TRUE
     )$ID
   } else {
+    observation.species <- relevant$ObservationSpecies
     observation.species <- observation.species[
       order(observation.species$ObservationID),
       c("ObservationID", "Count")
@@ -59,6 +60,22 @@ prepare_dataset_species_observation <- function(
     observation.species.sha <- write_delim_git(
       x = observation.species,
       file = filename,
+      connection = raw.connection
+    )
+    write_delim_git(
+      x = relevant$WeightYear[
+        order(relevant$WeightYear$Year, relevant$WeightYear$Stratum),
+        c("Year", "Stratum", "Weight")
+      ],
+      file = paste0("weight_year_", filename),
+      connection = raw.connection
+    )
+    write_delim_git(
+      x = relevant$WeightCycle[
+        order(relevant$WeightCycle$Cycle, relevant$WeightCycle$Stratum),
+        c("Cycle", "Stratum", "Weight")
+      ],
+      file = paste0("weight_year_", filename),
       connection = raw.connection
     )
     status.id <- odbc_get_multi_id(
