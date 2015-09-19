@@ -37,17 +37,17 @@ prepare_dataset_species_observation <- function(
   } else {
     observation.species <- select_relevant(observation, observation.species)
   }
-  
+
   filename <- paste0(this.species$SpeciesGroupID, ".txt")
-  
   if (is.null(observation.species)) {
+
     observation.species.sha <- NA
     status.id <- odbc_get_multi_id(
       data = data.frame(Description = "insufficient data"),
-      id.field = "ID", 
-      merge.field = c("Description"), 
+      id.field = "ID",
+      merge.field = c("Description"),
       table = "AnalysisStatus",
-      channel = result.channel, 
+      channel = result.channel,
       create = TRUE,
       select = TRUE
     )$ID
@@ -57,31 +57,31 @@ prepare_dataset_species_observation <- function(
       c("ObservationID", "Count")
     ]
     observation.species.sha <- write_delim_git(
-      x = observation.species, 
-      file = filename, 
+      x = observation.species,
+      file = filename,
       connection = raw.connection
     )
     status.id <- odbc_get_multi_id(
       data = data.frame(Description = "waiting"),
-      id.field = "ID", 
-      merge.field = c("Description"), 
+      id.field = "ID",
+      merge.field = c("Description"),
       table = "AnalysisStatus",
-      channel = result.channel, 
+      channel = result.channel,
       create = TRUE,
       select = TRUE
     )$ID
   }
-  
+
   import.id <- odbc_get_multi_id(
     data = data.frame(Description = "import"),
-    id.field = "ID", 
-    merge.field = "Description", 
+    id.field = "ID",
+    merge.field = "Description",
     table = "ModelType",
-    channel = result.channel, 
+    channel = result.channel,
     create = TRUE,
     select = TRUE
   )$ID
-  
+
   model.set <- data.frame(
     ModelTypeID = import.id,
     FirstYear = first.year,
@@ -90,22 +90,22 @@ prepare_dataset_species_observation <- function(
   )
   model.set.id <- odbc_get_multi_id(
     data = model.set,
-    id.field = "ID", 
-    merge.field = c("ModelTypeID", "FirstYear", "LastYear", "Duration"), 
+    id.field = "ID",
+    merge.field = c("ModelTypeID", "FirstYear", "LastYear", "Duration"),
     table = "ModelSet",
-    channel = result.channel, 
+    channel = result.channel,
     create = TRUE,
     select = TRUE
   )$ID
-  
+
   version <- get_analysis_version(sessionInfo())
-  
+
   r.package <- odbc_get_multi_id(
     data = version@RPackage[, c("Description", "Version")],
     id.field = "ID",
     merge.field = c("Description", "Version"),
     table = "RPackage",
-    channel = result.channel, 
+    channel = result.channel,
     create = TRUE,
     select = TRUE
   )
@@ -119,7 +119,7 @@ prepare_dataset_species_observation <- function(
     id.field = "ID",
     merge.field = "Description",
     table = "AnalysisVersion",
-    channel = result.channel, 
+    channel = result.channel,
     create = TRUE,
     select = TRUE
   )
@@ -131,13 +131,13 @@ prepare_dataset_species_observation <- function(
     id.field = "ID",
     merge.field = c("AnalysisVersionID", "RPackageID"),
     table = "AnalysisVersionRPackage",
-    channel = result.channel, 
+    channel = result.channel,
     create = TRUE,
     select = FALSE
   )
-  
+
   version.id <- analysis.version$AnalysisVersionID
-  
+
   sql <- paste0("
     SELECT
       ID, FileName, PathName, Fingerprint
@@ -150,7 +150,7 @@ prepare_dataset_species_observation <- function(
   ")
   location.ds <- sqlQuery(channel = result.channel, query = sql, stringsAsFactors = FALSE)
   fingerprint <- get_sha1(sort(c(location.ds$Fingerprint, observation.species.sha)))
-  
+
   analysis <- data.frame(
     ModelSetID = model.set.id,
     LocationGroupID = odbc_get_id(
@@ -167,14 +167,14 @@ prepare_dataset_species_observation <- function(
   )
   analysis.id <- odbc_get_multi_id(
     data = analysis,
-    id.field = "ID", 
+    id.field = "ID",
     merge.field = c("ModelSetID", "LocationGroupID", "SpeciesGroupID", "AnalysisVersionID", "Fingerprint"),
     table = "Analysis",
     channel = result.channel,
     create = TRUE,
     select = TRUE
   )$ID
-  
+
   if (!is.na(observation.species.sha)) {
     dataset <- data.frame(
       FileName = filename,
@@ -187,10 +187,10 @@ prepare_dataset_species_observation <- function(
       location.ds,
       odbc_get_multi_id(
         data = dataset,
-        id.field = "ID", 
-        merge.field = c("FileName", "PathName", "Fingerprint"), 
-        table = "Dataset", 
-        channel = result.channel, 
+        id.field = "ID",
+        merge.field = c("FileName", "PathName", "Fingerprint"),
+        table = "Dataset",
+        channel = result.channel,
         create = TRUE,
         select = TRUE
       )
@@ -202,10 +202,10 @@ prepare_dataset_species_observation <- function(
   )
   odbc_get_multi_id(
     data = analysis.dataset,
-    id.field = "ID", 
-    merge.field = c("AnalysisID", "DatasetID"), 
-    table = "AnalysisDataset", 
-    channel = result.channel, 
+    id.field = "ID",
+    merge.field = c("AnalysisID", "DatasetID"),
+    table = "AnalysisDataset",
+    channel = result.channel,
     create = TRUE,
     select = FALSE
   )
