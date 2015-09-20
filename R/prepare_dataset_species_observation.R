@@ -9,6 +9,7 @@
 #' @importFrom assertthat assert_that is.count
 #' @importFrom n2kanalysis get_analysis_version
 #' @importFrom RODBC sqlQuery
+#' @importFrom dplyr %>% select_ arrange_
 prepare_dataset_species_observation <- function(
   this.species, observation, result.channel, source.channel, raw.connection, scheme.id, first.year, last.year
 ){
@@ -71,11 +72,10 @@ prepare_dataset_species_observation <- function(
       connection = raw.connection
     )
     write_delim_git(
-      x = relevant$WeightCycle[
-        order(relevant$WeightCycle$Cycle, relevant$WeightCycle$Stratum),
-        c("Cycle", "Stratum", "Weight")
-      ],
-      file = paste0("weight_year_", filename),
+      x = relevant$WeightCycle %>%
+        select_(~Cycle, ~Stratum, ~Weight) %>%
+        arrange_(~Cycle, ~Stratum),
+      file = paste0("weight_cycle_", filename),
       connection = raw.connection
     )
     status.id <- odbc_get_multi_id(
