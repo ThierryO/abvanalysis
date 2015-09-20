@@ -69,7 +69,7 @@ select_relevant <- function(observation, observation.species){
     list(
       ObservationSpecies = observation.species[, c("ObservationID", "Count")],
       WeightYear = weight.year[weight.year$Weight > 0, c("Year", "Stratum", "Weight")],
-      WeightCycle = weight.cycle[weight.year$Cycle > 0, c("Cycle", "Stratum", "Weight")]
+      WeightCycle = weight.cycle[weight.cycle$Weight > 0, c("Cycle", "Stratum", "Weight")]
     )
   )
 }
