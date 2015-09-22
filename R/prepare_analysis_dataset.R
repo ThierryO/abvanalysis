@@ -9,6 +9,7 @@
 #' @importFrom n2khelper check_path check_dataframe_variable git_recent
 #' @importFrom assertthat assert_that is.count
 #' @importFrom plyr ddply
+#' @importFrom dplyr rename_
 #' @importClassesFrom n2kanalysis n2kInlaNbinomial
 #' @importFrom n2kanalysis n2k_inla_nbinomial
 #' @importMethodsFrom n2kanalysis get_file_fingerprint get_status_fingerprint get_seed
@@ -61,6 +62,26 @@ prepare_analysis_dataset <- function(
     variable = c("ObservationID", "Count"),
     name = rawdata.file
   )
+  weight.year <- read_delim_git(
+    file = paste0("weight_year_", rawdata.file),
+    connection = raw.connection
+  )
+  check_dataframe_variable(
+    df = weight.year,
+    variable = c("Year", "Stratum", "Weight"),
+    name = rawdata.file
+  )
+  weight.year  <- rename_(weight.year, WeightYear = ~Weight)
+  weight.cycle <- read_delim_git(
+    file = paste0("weight_cycle_", rawdata.file),
+    connection = raw.connection
+  )
+  check_dataframe_variable(
+    df = weight.cycle,
+    variable = c("Cycle", "Stratum", "Weight"),
+    name = rawdata.file
+  )
+  weight.cycle  <- rename_(weight.cycle, WeightCycle = ~Weight)
   analysis.date <- git_recent(
     file = rawdata.file,
     connection = raw.connection
@@ -111,6 +132,7 @@ prepare_analysis_dataset <- function(
       multi.stratum <- length(levels(dataset$fStratum)) > 1
       if (multi.stratum) {
         design.variable <- "fStratum"
+        dataset <- merge(dataset, weight.year, by = c("Stratum", "Year"))
       } else {
         design.variable <- character(0)
       }
@@ -135,12 +157,12 @@ prepare_analysis_dataset <- function(
         cycle.label <- seq(min(dataset$Year), max(dataset$Year), by = 3)
         if (length(cycle.label) > 1) {
           cycle.label <- paste(cycle.label, cycle.label + 2, sep = " - ")
-          dataset$fCycle <- factor(
-            (dataset$Year - min(dataset$Year)) %/% 3,
-            labels = cycle.label
-          )
+          dataset$Cycle <- (dataset$Year - min(dataset$Year)) %/% 3
+          dataset$fCycle <- factor(dataset$Cycle, labels = cycle.label)
+
           if (multi.stratum) {
             trend <- c(trend, "fCycle * fStratum")
+            dataset <- merge(dataset, weight.cycle, by = c("Stratum", "Cycle"))
           } else {
             trend <- c(trend, "fCycle")
           }
@@ -181,13 +203,21 @@ prepare_analysis_dataset <- function(
             lc <- get_linear_lincomb(
               dataset = dataset,
               time.var = trend.variable[i],
-              formula = as.formula(weight.formula[i])
+              formula = as.formula(weight.formula[i]),
+              stratum.var = "fStratum",
+              weight = "WeightYear"
             )
           } else {
             lc <- get_nonlinear_lincomb(
               dataset = dataset,
               time.var = trend.variable[i],
-              formula = as.formula(weight.formula[i])
+              formula = as.formula(weight.formula[i]),
+              stratum.var = "fStratum",
+              weight = ifelse(
+                trend.variable[i] == "fYear",
+                "WeightYear",
+                "WeightCycle"
+              )
             )
           }
         } else {
@@ -196,7 +226,7 @@ prepare_analysis_dataset <- function(
         data <- dataset[
           ,
           c(
-            "ObservationID", "DatasourceID", "Count", "Weight",
+            "ObservationID", "DatasourceID", "Count",
             trend.variable[i], design.variable
           )
         ]

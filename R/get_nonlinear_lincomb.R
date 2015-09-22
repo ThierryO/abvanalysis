@@ -3,34 +3,34 @@
 #' @param time.var the name of the time variable
 #' @param stratum.var the name of the stratum variable
 #' @param formula the formula for the model.matrix
+#' @param weight the name of the weight variable
 #' @export
 #' @importFrom n2khelper check_dataframe_variable
-#' @importFrom dplyr %>% group_by_ summarise_ inner_join mutate_ select_
+#' @importFrom dplyr %>% select_ distinct group_by_ mutate_
+#' @importFrom assertthat assert_that is.string
 get_nonlinear_lincomb <- function(
   dataset,
   time.var,
   stratum.var = "fStratum",
-  formula
+  formula,
+  weight
 ){
+  assert_that(is.string(time.var))
+  assert_that(is.string(stratum.var))
+  assert_that(is.string(weight))
   check_dataframe_variable(
     df = dataset,
-    variable = c(time.var, stratum.var, "Weight", "fPeriod")
+    variable = c(time.var, stratum.var, weight, "fPeriod")
   )
-
   available.weight <- dataset %>%
-    group_by_(time.var, stratum.var, ~Weight) %>%
-    summarise_() %>%
-    group_by_(time.var, stratum.var) %>%
-    summarise_(Weight = ~mean(Weight))
-  available.weight <- available.weight %>%
+    select_(time.var, stratum.var, weight) %>%
+    distinct() %>%
     group_by_(time.var) %>%
-    summarise_(TotalWeight = ~sum(Weight)) %>%
-    inner_join(available.weight, by = time.var) %>%
     mutate_(
-      Weight = ~Weight / TotalWeight,
+      Weight = weight,
+      Weight = ~Weight / sum(Weight),
       fPeriod = ~sort(unique(dataset$fPeriod))[1]
-    ) %>%
-    select_(~-TotalWeight)
+    )
   mm <- available.weight %>%
     model.matrix(object = formula) * available.weight$Weight
   old.names <- colnames(mm)

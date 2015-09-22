@@ -2,20 +2,27 @@
 #' @inheritParams get_nonlinear_lincomb
 #' @export
 #' @importFrom n2khelper check_dataframe_variable
-#' @importFrom dplyr %>% group_by_ summarise_ inner_join mutate_ select_
+#' @importFrom dplyr %>% select_ distinct group_by_ mutate_ summarise_ mutate_
+#' @importFrom assertthat assert_that is.string
 get_linear_lincomb <- function(
   dataset,
   time.var,
   stratum.var = "fStratum",
-  formula
+  formula,
+  weight
 ){
+  assert_that(is.string(time.var))
+  assert_that(is.string(stratum.var))
+  assert_that(is.string(weight))
   check_dataframe_variable(
     df = dataset,
-    variable = c(time.var, stratum.var, "Weight", "fPeriod")
+    variable = c(time.var, stratum.var, weight, "fPeriod")
   )
-
   available.weight <- dataset %>%
+    select_(stratum.var, weight) %>%
+    distinct() %>%
     group_by_(stratum.var) %>%
+    mutate_(Weight = weight) %>%
     summarise_(Weight = ~mean(Weight)) %>%
     mutate_(
       Weight = ~Weight / sum(Weight),
