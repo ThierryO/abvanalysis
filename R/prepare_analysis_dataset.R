@@ -141,15 +141,21 @@ prepare_analysis_dataset <- function(
       dataset$fYear <- factor(dataset$Year)
       if (length(levels(dataset$fYear)) == 1) {
         if (multi.stratum) {
-          trend <- "fYear * fStratum"
+          trend <- "0 + fStratum"
         } else {
-          trend <- "fYear"
+          trend <- "0 + fYear"
         }
         trend.variable <- "fYear"
       } else {
         dataset$cYear <- dataset$Year - max(dataset$Year)
         if (multi.stratum) {
-          trend <- c("fYear * fStratum", "0 + fStratum + cYear:fStratum")
+          dataset$fYearStratum <- interaction(
+            dataset$fYear,
+            dataset$fStratum,
+            drop = TRUE
+          )
+          design.variable <- c(design.variable, "fYearStratum")
+          trend <- c("0 + fYearStratum", "0 + fStratum + cYear:fStratum")
         } else {
           trend <- c("fYear", "cYear")
         }
@@ -161,10 +167,16 @@ prepare_analysis_dataset <- function(
           dataset$fCycle <- factor(dataset$Cycle, labels = cycle.label)
 
           if (multi.stratum) {
-            trend <- c(trend, "fCycle * fStratum")
+            dataset$fCycleStratum <- interaction(
+              dataset$fCycle,
+              dataset$fStratum,
+              drop = TRUE
+            )
+            design.variable <- c(design.variable, "fCycleStratum")
+            trend <- c(trend, "0 + fCycleStratum")
             dataset <- merge(dataset, weight.cycle, by = c("Stratum", "Cycle"))
           } else {
-            trend <- c(trend, "fCycle")
+            trend <- c(trend, "0 + fCycle")
           }
           trend.variable <- c(trend.variable, "fCycle")
         }
@@ -212,7 +224,7 @@ prepare_analysis_dataset <- function(
               dataset = dataset,
               time.var = trend.variable[i],
               formula = as.formula(weight.formula[i]),
-              stratum.var = "fStratum",
+              stratum.var = paste0(trend.variable[i], "Stratum"),
               weight = ifelse(
                 trend.variable[i] == "fYear",
                 "WeightYear",
