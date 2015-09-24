@@ -16,5 +16,6 @@ Imports:
   dplyr,
   RODBC
 Suggests:
+  pander,
   knitr
 VignetteBuilder: knitr
