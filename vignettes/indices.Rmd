@@ -107,8 +107,8 @@ De weging wordt door een paar zaken nog complexer gemaakt:
     Jaarlijkse indices
       ~ Kans op aanwezigheid wordt jaarlijks berekend. Stratum waarvoor in een bepaald jaar geen waarnemingen zijn worden genegeerd voor dat jaar.
     
-    Indices per cycle
-      ~ Kans op aanwezigheid wordt per cyclys berekend. Strata zonder waarnemingen in de volledige cyclus worden genegeerd voor die cyclus. Deze situatie komtveel minder frequent voor dan bij de jaarlijkse indices
+    Indices per cyclus
+      ~ Kans op aanwezigheid wordt per cyclus berekend. Strata zonder waarnemingen in de volledige cyclus worden genegeerd voor die cyclus. Deze situatie komtveel minder frequent voor dan bij de jaarlijkse indices
         
     Lineair trend
       ~ We gebruiken de weging van de jaarlijkse indices die we uitmiddelen over de volledige looptijd.
