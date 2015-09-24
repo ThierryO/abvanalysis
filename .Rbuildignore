@@ -3,3 +3,4 @@
 ^wercker\.yml$
 ^\.lintr$
 ^\.git$
+^vignettes/.*\.html$

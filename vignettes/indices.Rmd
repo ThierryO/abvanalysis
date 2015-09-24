@@ -1,0 +1,117 @@
+---
+title: "Weging van de indices volgens stratum"
+author: "Thierry Onkelinx"
+date: "22 september 2015"
+output: html_document
+---
+<!-- \VignetteEngine{knitr::rmarkdown} -->
+```{r setup, echo = FALSE, message = FALSE}
+library(dplyr)
+library(pander)
+panderOptions("table.split.table", 100)
+knitr::opts_chunk$set(
+  echo = FALSE
+)
+percent <- function(x, escape = ""){
+  sprintf("%.0f%s%%", 100 * x, escape)
+}
+```
+# Inleiding
+
+Aan de hand van een eenvoudig rekenvoorbeeld geven we aan op welke manier de indices worden berekend wanneer een soort in meerdere strata waargenomen wordt. Vooraleer de steekproef te trekken werden de UTM hokken van Vlaanderen ingedeeld in een aantal strata. Deze strata zijn gebaseerd op het dominante landgebruik in een hok. De stratificatie heeft twee voordelen. Ten eerste kunnen we garanderen dat de steekproef elementen uit elk stratum bevat. Dergelijke garantie hebben we niet bij een 'simple random sample'. Vooral zeldzamere strata lopen het risico om niet of slechts beperkt aanwezig te zijn in de steekproef. Ten tweede kunnen we de verhouding tussen de strata controleren. Hierbij hoeft de verhouding in de steekproef niet dezelfde te zijn als de verhouding in de populatie. We kunnen zeldzame strata overbemonsteren en algemene strata onderbemonsteren.
+
+# Werkwijze schatting indices
+
+1. Selectie van de relevante waarnemingen
+1. Berekenen van index per stratum
+1. Berekenen van gewogen gemiddelde van de index
+
+## Selectie van relevante waarnemingen
+
+```{r relevant}
+trend <- 1.5
+present <- 1
+total <- 4
+result <- log(trend) * present / total
+```
+
+Niet elke soort komt overal voor. Geobserveerde hokken waarin de soort niet voorkomt in rekening brengen zou de de wijzigingen afvlakken. Stel dat een soort in `r percent(present / total)` van de hokken voorkomt. De index in deze hokken is `r percent(trend)` t.o.v. het referentiejaar. In de hokken waar de soort afwezig is, is er uiteraard geen wijziging in de aantallen en blijft de index 100%. Wanneer we alle hokken in rekening brengen dan is de wijziging $\frac{`r present`}{`r total`}\log(`r trend`) + \frac{`r total - present`}{`r total`}\log(1) = `r sprintf("%.3f", result)` = \log(`r percent(exp(result), escape = "\\")`)$, hetgeen een beduidend minder sterke wijziging is. Merk op dat we de indices steeds in de logschaal bekijken. Indices zijn een relatieve maat. Een verdubbeling ($\log(2) = 0.6931$) is even sterk als een halvering ($\log(0.5) = -0.6931$). Een verviervoudiging ($\log(4) = 1.3863$) is even sterk als een reductie tot een kwart ($\log(0.25) = -1.3863$). 
+
+Een gelijkaardig probleem doet zich voor met de telperiodes. De broedvogels worden tijdens drie verschillende periodes van elk 6 weken geteld. Sommige broedvogels zijn gedurende de drie periodes aktief. Andere soorten zijn slechts tijdens een of twee periodes aktief. De periodes waarin een soort niet aktief is in rekening brengen zou de trend opnieuw afvlakken.
+
+Daarom beperken de gegevens tot de gegevens die aan volgende criteria voldoen.
+
+1. Selecteer enkel de periodes waarvan het gemiddelde aantal minstens 15% bedraagt van de periode met de hoogste gemiddelde aantallen. 
+1. Selecteer uit de resterende gegevens enkel de locaties waar de soort in minstens twee verschillende jaren waargenomen werd.
+
+## Weging van de strata
+
+```{r weging_strata}
+trend <- c(agri = 0.9, forest = 1.2)
+population <- c(agri = 5000, forest = 1000)
+sampled <- c(agri = 200, forest = 100)
+present <- c(agri = 10, forest = 90)
+naive <- sprintf(
+  "$0.5 \\log(%.2f) + 0.5\\log(%.2f) = %.2f = \\log(%.2f)$", 
+  trend["agri"], 
+  trend["forest"], 
+  mean(log(trend)), 
+  exp(mean(log(trend)))
+)
+population.weighted <- sprintf(
+  "$\\frac{%i}{%i}\\log(%.2f) + \\frac{%i}{%i}\\log(%.2f) = %.2f = \\log(%.2f)$",
+  population["agri"],
+  sum(population),
+  trend["agri"],
+  population["forest"],
+  sum(population),
+  trend["forest"],
+  weighted.mean(log(trend), population),
+  exp(weighted.mean(log(trend), population))
+)
+stratum <- data_frame(
+  Stratum = c("Landbouw", "Bos"),
+  Populatie = population,
+  Onderzocht = sampled,
+  Aanwezig = present,
+  Kans = percent(present / sampled),
+  'Totaal aanwezig' = population * present / sampled
+)
+rownames(stratum) <- NULL
+present.weighted <- sprintf(
+  "$\\frac{%i}{%i}\\log(%.2f) + \\frac{%i}{%i}\\log(%.2f) = %.2f = \\log(%.2f)$",
+  stratum$`Totaal aanwezig`[stratum$Stratum == "Landbouw"],
+  sum(stratum$`Totaal aanwezig`),
+  trend["agri"],
+  stratum$`Totaal aanwezig`[stratum$Stratum == "Bos"],
+  sum(stratum$`Totaal aanwezig`),
+  trend["forest"],
+  weighted.mean(log(trend), stratum$`Totaal aanwezig`),
+  exp(weighted.mean(log(trend), stratum$`Totaal aanwezig`))
+)
+
+```
+
+Veronderstel dat een soort slechts in twee strata voorkomt: landbouw en bos. In het landbouwstratum bedraagt de index `r percent(trend["agri"])`, in het bosstratum `r percent(trend["forest"])`. Een naieve schatting van de globale index is `r naive`. Deze schatting veronderstelt dat er evenveel landbouw als bos aanwezig is. Stel dat er `r population["agri"]` landbouwhokken en `r population["forest"]` boshokken zijn. In dat geval moeten we de individuele indices wegen a ratio van de verhouding in de strata `r population.weighted`.
+
+Zoals reeds hoger gesteld komt een soort niet noodzakelijk in alle hokken van een stratum voor. We kunnen de kans op aanwezigheid per stratum schatten aan de hand van de verhouding tussen het aantal hokken waarin de soort aangetroffen werd en het aantal onderzochte hokken. Onderstaande tabel geeft hiervan een rekenvoorbeeld. We vermenigvuldigen deze kans met de populatiegrootte van het stratum om een schatting te krijgen van het totaal aantal hokken waarin de soort aanwezig is. De gewogen index wordt dan `r present.weighted`. Merk op dat de resultaten steeds veranderen naargelang de gebruikte weging. Het is daarom belangrijk om de weging op een zinvolle en doordachte manier uit te voeren.
+
+```{r}
+pander(stratum)
+```
+
+De weging wordt door een paar zaken nog complexer gemaakt:
+
+- De kans op aanwezigheid in een hok per stratum blijft niet noodzakelijk constant. Met welke frequentie berekenen we dit? Een aantal mogelijkheden zijn jaarlijks, per cyclus, over meerdere cycli, ... De huidige situatie is als volgt:
+
+    Jaarlijkse indices
+      ~ Kans op aanwezigheid wordt jaarlijks berekend. Stratum waarvoor in een bepaald jaar geen waarnemingen zijn worden genegeerd voor dat jaar.
+    
+    Indices per cycle
+      ~ Kans op aanwezigheid wordt per cyclys berekend. Strata zonder waarnemingen in de volledige cyclus worden genegeerd voor die cyclus. Deze situatie komtveel minder frequent voor dan bij de jaarlijkse indices
+        
+    Lineair trend
+      ~ We gebruiken de weging van de jaarlijkse indices die we uitmiddelen over de volledige looptijd.
+        
+- Voor bepaalde soorten kan het aantal geselecteerd hokken in een stratum klein worden. Volstaat 1 geselecteerd hok per stratum of leggen we de lat hoger?
+- Een hok wordt in principe slechts om de drie jaar bezocht. Hierdoor bestaat de kans dat we niet in elk jaar gegevens hebben van een bepaald stratum. En kunnen we bijgevolg voor die combinaties van jaar en stratum geen index berekenen. Dergelijke situatie komt vooral voor bij zeer kleine strata of bij strata waarin een bepaalde soort slechts sporadisch voorkomt. Voor dit probleem zijn er een aantal mogelijke oplossingen 1) het stratum in kwestie in dat jaar negeren, 2) het stratum volledig uit de analyse halen.

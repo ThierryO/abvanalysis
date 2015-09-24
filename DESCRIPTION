@@ -15,3 +15,6 @@ Imports:
   assertthat,
   dplyr,
   RODBC
+Suggests:
+  knitr
+VignetteBuilder: knitr
