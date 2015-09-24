@@ -2,9 +2,12 @@
 title: "Weging van de indices volgens stratum"
 author: "Thierry Onkelinx"
 date: "22 september 2015"
-output: html_document
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Weging van de indices volgens stratum}
+  \usepackage[utf8]{inputenc}
 ---
-<!-- \VignetteEngine{knitr::rmarkdown} -->
 ```{r setup, echo = FALSE, message = FALSE}
 library(dplyr)
 library(pander)

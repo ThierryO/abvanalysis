@@ -4,3 +4,4 @@
 ^\.lintr$
 ^\.git$
 ^vignettes/.*\.html$
+^vignettes/.*\.R$
