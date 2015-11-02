@@ -244,7 +244,7 @@ prepare_analysis_dataset <- function(
         ]
         model.type <- paste(
           "inla nbinomial:",
-          trend.variable[i], "+ Period + Location + SubLocation"
+          trend.variable[i], "+ Stratum + Period + Location + SubLocation"
         )
         formula <- paste("Count ~", covariates[i])
         analysis <- n2k_inla_nbinomial(
