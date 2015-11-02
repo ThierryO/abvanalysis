@@ -9,21 +9,22 @@
 #' @importFrom assertthat assert_that is.count
 #' @importFrom n2kanalysis get_analysis_version
 #' @importFrom RODBC sqlQuery
-#' @importFrom dplyr %>% select_ arrange_
+#' @importFrom dplyr %>% select_ arrange_ transmute_ inner_join rename_
 prepare_dataset_species_observation <- function(
-  this.species, observation, result.channel, source.channel, raw.connection, scheme.id, first.year, last.year
+  this.species, observation, result.channel, source.channel, raw.connection,
+  scheme.id, first.year, last.year
 ){
   check_dataframe_variable(
     df = this.species,
     variable = c("ExternalCode", "SpeciesGroupID"),
     name = "this.species"
   )
-  if(nrow(this.species) != 1){
+  if (nrow(this.species) != 1) {
     stop("this.species must contain exactly one row")
   }
   check_dataframe_variable(
     df = observation,
-    variable = c("ObservationID", "SubLocationID"),
+    variable = c("ObservationID", "SubLocationID", "Period"),
     name = "observation"
   )
   assert_that(is.count(scheme.id))
@@ -44,7 +45,10 @@ prepare_dataset_species_observation <- function(
   if (is.null(relevant)) {
     observation.species.sha <- NA
     status.id <- odbc_get_multi_id(
-      data = data.frame(Description = "insufficient data"),
+      data = data.frame(
+        Description = "insufficient data",
+        stringsAsFactors = TRUE
+      ),
       id.field = "ID",
       merge.field = c("Description"),
       table = "AnalysisStatus",
@@ -54,28 +58,19 @@ prepare_dataset_species_observation <- function(
     )$ID
   } else {
     observation.species <- relevant$ObservationSpecies
-    observation.species <- observation.species[
-      order(observation.species$ObservationID),
-      c("ObservationID", "Count")
-    ]
+    observation.species <- observation.species %>%
+      select_(~ObservationID, ~Count) %>%
+      arrange_(~ObservationID)
     observation.species.sha <- write_delim_git(
       x = observation.species,
       file = filename,
       connection = raw.connection
     )
     write_delim_git(
-      x = relevant$WeightYear[
-        order(relevant$WeightYear$Year, relevant$WeightYear$Stratum),
-        c("Year", "Stratum", "Weight")
-      ],
-      file = paste0("weight_year_", filename),
-      connection = raw.connection
-    )
-    write_delim_git(
-      x = relevant$WeightCycle %>%
-        select_(~Cycle, ~Stratum, ~Weight) %>%
-        arrange_(~Cycle, ~Stratum),
-      file = paste0("weight_cycle_", filename),
+      x = relevant$Weights %>%
+        transmute_(Stratum = ~levels(Stratum)[Stratum], ~Weight) %>%
+        arrange_(~Stratum),
+      file = paste0("weights_", filename),
       connection = raw.connection
     )
     status.id <- odbc_get_multi_id(
@@ -117,7 +112,7 @@ prepare_dataset_species_observation <- function(
 
   version <- get_analysis_version(sessionInfo())
 
-  r.package <- odbc_get_multi_id(
+  analysis.package <- odbc_get_multi_id(
     data = version@RPackage[, c("Description", "Version")],
     id.field = "ID",
     merge.field = c("Description", "Version"),
@@ -125,24 +120,25 @@ prepare_dataset_species_observation <- function(
     channel = result.channel,
     create = TRUE,
     select = TRUE
-  )
-  r.package <- merge(r.package, version@RPackage)[, c("Fingerprint", "ID")]
-  colnames(r.package)[colnames(r.package) == "Fingerprint"] <- "RPackage"
-  colnames(r.package)[colnames(r.package) == "ID"] <- "RPackageID"
-  analysis.package <- merge(version@AnalysisVersionRPackage, r.package)[, c("AnalysisVersion", "RPackageID")]
+  ) %>%
+    inner_join(version@RPackage, by = c("Description", "Version")) %>%
+    select_(RPackage = ~Fingerprint, RPackageID = ~ID) %>%
+    inner_join(version@AnalysisVersionRPackage, by = "RPackage") %>%
+    select_(~-RPackage)
 
-  analysis.version <- odbc_get_multi_id(
-    data = data.frame(Description = version@AnalysisVersion$Fingerprint),
+  analysis.package <- odbc_get_multi_id(
+    data = version@AnalysisVersion %>%
+      select_(Description = ~Fingerprint),
     id.field = "ID",
     merge.field = "Description",
     table = "AnalysisVersion",
     channel = result.channel,
     create = TRUE,
     select = TRUE
-  )
-  colnames(analysis.version)[colnames(analysis.version) == "ID"] <- "AnalysisVersionID"
-  colnames(analysis.version)[colnames(analysis.version) == "Description"] <- "AnalysisVersion"
-  analysis.package <- merge(analysis.version, analysis.package)[, c("AnalysisVersionID", "RPackageID")]
+  ) %>%
+    rename_(AnalysisVersionID = ~ID, AnalysisVersion = ~Description) %>%
+    inner_join(analysis.package, by = "AnalysisVersion") %>%
+    select_(~-AnalysisVersion)
   odbc_get_multi_id(
     data = analysis.package,
     id.field = "ID",
@@ -153,7 +149,7 @@ prepare_dataset_species_observation <- function(
     select = FALSE
   )
 
-  version.id <- analysis.version$AnalysisVersionID
+  version.id <- unique(analysis.package$AnalysisVersionID)
 
   sql <- paste0("
     SELECT
@@ -162,11 +158,22 @@ prepare_dataset_species_observation <- function(
       Dataset
     WHERE
       PathName = '", raw.connection@LocalPath, "' AND
-      Filename IN ('observation.txt', 'species.txt', 'speciesgroup.txt', 'locationgrouplocation.txt') AND
+      Filename IN (
+        'observation.txt',
+        'species.txt',
+        'speciesgroup.txt',
+        'locationgrouplocation.txt'
+      ) AND
       Obsolete = 0
   ")
-  location.ds <- sqlQuery(channel = result.channel, query = sql, stringsAsFactors = FALSE)
-  fingerprint <- get_sha1(sort(c(location.ds$Fingerprint, observation.species.sha)))
+  location.ds <- sqlQuery(
+    channel = result.channel,
+    query = sql,
+    stringsAsFactors = FALSE
+  )
+  fingerprint <- get_sha1(
+    sort(c(location.ds$Fingerprint, observation.species.sha))
+  )
 
   analysis <- data.frame(
     ModelSetID = model.set.id,
@@ -185,7 +192,10 @@ prepare_dataset_species_observation <- function(
   analysis.id <- odbc_get_multi_id(
     data = analysis,
     id.field = "ID",
-    merge.field = c("ModelSetID", "LocationGroupID", "SpeciesGroupID", "AnalysisVersionID", "Fingerprint"),
+    merge.field = c(
+      "ModelSetID", "LocationGroupID", "SpeciesGroupID", "AnalysisVersionID",
+      "Fingerprint"
+    ),
     table = "Analysis",
     channel = result.channel,
     create = TRUE,
@@ -198,7 +208,8 @@ prepare_dataset_species_observation <- function(
       PathName = raw.connection@LocalPath,
       Fingerprint = observation.species.sha,
       ImportDate = import.date,
-      Obsolete = FALSE
+      Obsolete = FALSE,
+      stringsAsFactors = FALSE
     )
     location.ds <- rbind(
       location.ds,
