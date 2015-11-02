@@ -9,7 +9,7 @@
 #' @importFrom n2khelper check_path check_dataframe_variable git_recent
 #' @importFrom assertthat assert_that is.count
 #' @importFrom plyr ddply
-#' @importFrom dplyr rename_
+#' @importFrom dplyr rename_ mutate_ arrange_ %>% inner_join select_ distinct_
 #' @importClassesFrom n2kanalysis n2kInlaNbinomial
 #' @importFrom n2kanalysis n2k_inla_nbinomial
 #' @importMethodsFrom n2kanalysis get_file_fingerprint get_status_fingerprint get_seed
@@ -62,26 +62,17 @@ prepare_analysis_dataset <- function(
     variable = c("ObservationID", "Count"),
     name = rawdata.file
   )
-  weight.year <- read_delim_git(
-    file = paste0("weight_year_", rawdata.file),
+  weights <- read_delim_git(
+    file = paste0("weights_", rawdata.file),
     connection = raw.connection
   )
   check_dataframe_variable(
-    df = weight.year,
-    variable = c("Year", "Stratum", "Weight"),
+    df = weights,
+    variable = c("Stratum", "Weight"),
     name = rawdata.file
   )
-  weight.year  <- rename_(weight.year, WeightYear = ~Weight)
-  weight.cycle <- read_delim_git(
-    file = paste0("weight_cycle_", rawdata.file),
-    connection = raw.connection
-  )
-  check_dataframe_variable(
-    df = weight.cycle,
-    variable = c("Cycle", "Stratum", "Weight"),
-    name = rawdata.file
-  )
-  weight.cycle  <- rename_(weight.cycle, WeightCycle = ~Weight)
+  weights <- mutate_(weights, fStratum = ~factor(Stratum)) %>%
+    arrange_(~fStratum)
   analysis.date <- git_recent(
     file = rawdata.file,
     connection = raw.connection
@@ -91,7 +82,7 @@ prepare_analysis_dataset <- function(
   seed <- species.id$Seed[species.id$SpeciesGroupID == speciesgroup.id]
   parent <- parent$Fingerprint[parent$SpeciesGroupID == speciesgroup.id]
 
-  rawdata <- merge(species.observation, observation)
+  rawdata <- inner_join(species.observation, observation, by = "ObservationID")
 
   message(speciesgroup.id, " ", appendLF = FALSE)
   utils::flush.console()
@@ -131,8 +122,15 @@ prepare_analysis_dataset <- function(
       dataset$fStratum <- factor(dataset$Stratum)
       multi.stratum <- length(levels(dataset$fStratum)) > 1
       if (multi.stratum) {
+        stratum.weight <- model.matrix(~0 + fStratum:Weight, data = weights) %>%
+          colSums() %>%
+          t()
+        colnames(stratum.weight) <- gsub(
+          ":Weight$",
+          "",
+          colnames(stratum.weight)
+        )
         design.variable <- "fStratum"
-        dataset <- merge(dataset, weight.year, by = c("Stratum", "Year"))
       } else {
         design.variable <- character(0)
       }
@@ -143,19 +141,22 @@ prepare_analysis_dataset <- function(
         if (multi.stratum) {
           trend <- "0 + fStratum"
         } else {
-          trend <- "0 + fYear"
+          trend <- "1"
         }
         trend.variable <- "fYear"
       } else {
         dataset$cYear <- dataset$Year - max(dataset$Year)
         if (multi.stratum) {
-          dataset$fYearStratum <- interaction(
-            dataset$fYear,
-            dataset$fStratum,
-            drop = TRUE
+          dataset$cStratum <- as.integer(dataset$fStratum)
+          design.variable <- list(
+            c(design.variable, "cYear"),
+            design.variable
           )
-          design.variable <- c(design.variable, "fYearStratum")
-          trend <- c("0 + fYearStratum", "0 + fStratum + cYear:fStratum")
+          trend <- c(
+            "0 + fStratum + fYear +
+            f(cYear, model = \"rw1\", replicate = as.integer(fStratum))",
+            "0 + fStratum + cYear:fStratum"
+          )
         } else {
           trend <- c("fYear", "cYear")
         }
@@ -163,20 +164,21 @@ prepare_analysis_dataset <- function(
         cycle.label <- seq(min(dataset$Year), max(dataset$Year), by = 3)
         if (length(cycle.label) > 1) {
           cycle.label <- paste(cycle.label, cycle.label + 2, sep = " - ")
-          dataset$Cycle <- (dataset$Year - min(dataset$Year)) %/% 3
-          dataset$fCycle <- factor(dataset$Cycle, labels = cycle.label)
+          dataset$cCycle <- (dataset$Year - min(dataset$Year)) %/% 3
+          dataset$fCycle <- factor(dataset$cCycle, labels = cycle.label)
 
           if (multi.stratum) {
-            dataset$fCycleStratum <- interaction(
-              dataset$fCycle,
-              dataset$fStratum,
-              drop = TRUE
+            design.variable <- c(
+              design.variable,
+              list(c(design.variable[[2]], "cCycle"))
             )
-            design.variable <- c(design.variable, "fCycleStratum")
-            trend <- c(trend, "0 + fCycleStratum")
-            dataset <- merge(dataset, weight.cycle, by = c("Stratum", "Cycle"))
+            trend <- c(
+              trend,
+              "0 + fStratum + fCycle +
+              f(cCycle, model = \"rw1\", replicate = as.integer(fStratum))"
+            )
           } else {
-            trend <- c(trend, "0 + fCycle")
+            trend <- c(trend, "fCycle")
           }
           trend.variable <- c(trend.variable, "fCycle")
         }
@@ -185,13 +187,13 @@ prepare_analysis_dataset <- function(
       dataset$fLocation <- factor(dataset$LocationID)
       if (length(levels(dataset$fLocation)) > 1) {
         design <- c(design, "f(fLocation, model = \"iid\")")
-        design.variable <- c(design.variable, "fLocation")
+        design.variable <- lapply(design.variable, c, "fLocation")
       }
 
       dataset$fSubLocation <- factor(dataset$SubLocationID)
       if (length(levels(dataset$fSubLocation)) > 1) {
         design <- c(design, "f(fSubLocation, model = \"iid\")")
-        design.variable <- c(design.variable, "fSubLocation")
+        design.variable <- lapply(design.variable, c, "fSubLocation")
       }
 
       if (multi.stratum) {
@@ -201,7 +203,7 @@ prepare_analysis_dataset <- function(
       dataset$fPeriod <- factor(dataset$Period)
       if (length(levels(dataset$fPeriod)) > 1) {
         design <- c(design, "fPeriod")
-        design.variable <- c(design.variable, "fPeriod")
+        design.variable <- lapply(design.variable, c, "fPeriod")
         if (multi.stratum) {
           weight.formula <- paste(weight.formula, "fPeriod", sep = "+")
         }
@@ -212,36 +214,48 @@ prepare_analysis_dataset <- function(
       fingerprint <- do.call(rbind, lapply(seq_along(covariates), function(i){
         if (multi.stratum) {
           if (trend.variable[i] == "cYear") {
-            lc <- get_linear_lincomb(
-              dataset = dataset,
-              time.var = trend.variable[i],
-              formula = as.formula(weight.formula[i]),
-              stratum.var = "fStratum",
-              weight = "WeightYear"
+            cyear <- c(unique(dataset$cYear), 1)
+            time.fixed <- outer(cyear, stratum.weight[1, ])
+            rownames(time.fixed) <- c(head(cyear, -1), "Trend")
+            colnames(time.fixed) <- paste0(colnames(time.fixed), ":cYear")
+            lc <- cbind(
+              rbind(
+                stratum.weight[rep(1, nrow(time.fixed) - 1), ],
+                0
+              ),
+              time.fixed
             )
           } else {
-            lc <- get_nonlinear_lincomb(
-              dataset = dataset,
-              time.var = trend.variable[i],
-              formula = as.formula(weight.formula[i]),
-              stratum.var = paste0(trend.variable[i], "Stratum"),
-              weight = ifelse(
-                trend.variable[i] == "fYear",
-                "WeightYear",
-                "WeightCycle"
-              )
+            time.fixed <- dataset %>%
+              select_(trend.variable[i]) %>%
+              distinct_() %>%
+              model.matrix(object = as.formula(paste("~", trend.variable[i])))
+            rownames(time.fixed) <- levels(dataset[, trend.variable[i]])
+            random <- matrix(
+              weights$Weight,
+              ncol = nrow(time.fixed) * nrow(weights),
+              nrow = nrow(time.fixed)
+            ) * do.call(cbind, rep(list(diag(nrow(time.fixed))), nrow(weights)))
+            colnames(random) <- rep(
+              gsub("^f", "c", trend.variable[i]),
+              ncol(random)
+            )
+            lc <- cbind(
+              stratum.weight[rep(1, nrow(time.fixed)), ],
+              time.fixed[, -1],
+              random
             )
           }
         } else {
           lc <- NULL
         }
-        data <- dataset[
-          ,
-          c(
-            "ObservationID", "DatasourceID", "Count",
-            trend.variable[i], design.variable
-          )
-        ]
+
+        data <- dataset %>%
+          select_(
+            ~ObservationID, ~DatasourceID, ~Count,
+            trend.variable[i], .dots = design.variable[[i]]
+          ) %>%
+          arrange_(.dots = design.variable[[i]], trend.variable[i])
         model.type <- paste(
           "inla nbinomial:",
           trend.variable[i], "+ Stratum + Period + Location + SubLocation"

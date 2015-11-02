@@ -5,6 +5,7 @@
 #' @importFrom n2khelper check_single_strictly_positive_integer check_path list_files_git git_sha
 #' @importFrom n2kanalysis status
 #' @importFrom plyr d_ply
+#' @importFrom dplyr inner_join
 #' @importFrom assertthat assert_that is.count
 prepare_analysis <- function(
   raw.connection, analysis.path = ".", min.observation = 100
@@ -44,7 +45,11 @@ prepare_analysis <- function(
     name = "locationgrouplocation.txt"
   )
 
-  observation <- merge(observation, locationgrouplocation)
+  observation <- inner_join(
+    observation,
+    locationgrouplocation,
+    by = "LocationID"
+  )
   rm(locationgrouplocation)
 
   message("Prepare analysis per species")
