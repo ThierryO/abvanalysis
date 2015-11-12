@@ -4,6 +4,7 @@
 #' @importFrom n2khelper check_single_strictly_positive_integer get_nbn_key_multi get_nbn_name odbc_get_multi_id connect_result
 #' @importFrom n2kanalysis mark_obsolete_dataset
 #' @importFrom reshape2 dcast
+#' @importFrom dplyr %>% mutate_
 prepare_dataset_species <- function(
   source.channel, result.channel, raw.connection, scheme.id
 ){
