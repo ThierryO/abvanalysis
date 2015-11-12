@@ -43,8 +43,8 @@ select_relevant <- function(observation, observation.species){
   }
   observation.species <- select_factor_count_strictly_positive(
     observation = observation.species,
-    variable = c("LocationID", "Year"),
-    threshold = 2
+    variable = "LocationID",
+    threshold = 1
   )
   if (nrow(observation.species) == 0) {
     return(NULL)
