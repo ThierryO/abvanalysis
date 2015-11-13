@@ -9,7 +9,7 @@
 #' @importFrom n2khelper check_path check_dataframe_variable git_recent
 #' @importFrom assertthat assert_that is.count
 #' @importFrom plyr ddply
-#' @importFrom dplyr rename_ mutate_ arrange_ %>% inner_join select_ distinct_
+#' @importFrom dplyr rename_ mutate_ arrange_ %>% inner_join select_ distinct_ left_join group_by_ filter_ select_
 #' @importClassesFrom n2kanalysis n2kInlaNbinomial
 #' @importFrom n2kanalysis n2k_inla_nbinomial
 #' @importMethodsFrom n2kanalysis get_file_fingerprint get_status_fingerprint get_seed
