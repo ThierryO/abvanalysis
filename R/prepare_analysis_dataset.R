@@ -82,7 +82,16 @@ prepare_analysis_dataset <- function(
   seed <- species.id$Seed[species.id$SpeciesGroupID == speciesgroup.id]
   parent <- parent$Fingerprint[parent$SpeciesGroupID == speciesgroup.id]
 
-  rawdata <- inner_join(species.observation, observation, by = "ObservationID")
+  rawdata <- left_join(observation, species.observation, by = "ObservationID") %>%
+    group_by_(~Period) %>%
+    mutate_(Relevant = ~any(!is.na(Count))) %>%
+    filter_(~Relevant) %>%
+    group_by_(~LocationID) %>%
+    mutate_(Relevant = ~any(!is.na(Count))) %>%
+    filter_(~Relevant) %>%
+    select_(~-Relevant) %>%
+    mutate_(Count = ~ifelse(is.na(Count), 0, Count)) %>%
+    as.data.frame()
 
   message(speciesgroup.id, " ", appendLF = FALSE)
   utils::flush.console()
