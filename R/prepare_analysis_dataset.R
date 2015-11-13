@@ -27,6 +27,10 @@ prepare_analysis_dataset <- function(
   analysis.path,
   min.observation
 ){
+  speciesgroup.id <- as.integer(gsub("\\.txt$", "", rawdata.file))
+  message(speciesgroup.id, " ", appendLF = FALSE)
+  utils::flush.console()
+
   assert_that(is.count(min.observation))
   metadata <- read_delim_git("metadata.txt", connection = raw.connection)
   scheme.id <- metadata$Value[metadata$Key == "SchemeID"]
@@ -77,7 +81,7 @@ prepare_analysis_dataset <- function(
     file = rawdata.file,
     connection = raw.connection
   )$Date
-  speciesgroup.id <- as.integer(gsub("\\.txt$", "", rawdata.file))
+
   species.id <- read_delim_git("species.txt", connection = raw.connection)
   seed <- species.id$Seed[species.id$SpeciesGroupID == speciesgroup.id]
   parent <- parent$Fingerprint[parent$SpeciesGroupID == speciesgroup.id]
@@ -93,8 +97,6 @@ prepare_analysis_dataset <- function(
     mutate_(Count = ~ifelse(is.na(Count), 0, Count)) %>%
     as.data.frame()
 
-  message(speciesgroup.id, " ", appendLF = FALSE)
-  utils::flush.console()
   analysis <- ddply(
     .data = rawdata,
     .variables = "LocationGroupID",
