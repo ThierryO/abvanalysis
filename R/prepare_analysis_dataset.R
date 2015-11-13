@@ -94,7 +94,7 @@ prepare_analysis_dataset <- function(
     mutate_(Relevant = ~any(!is.na(Count))) %>%
     filter_(~Relevant) %>%
     select_(~-Relevant) %>%
-    mutate_(Count = ~ifelse(is.na(Count), 0, Count)) %>%
+    mutate_(Count = ~ifelse(is.na(Count), 0L, Count)) %>%
     as.data.frame()
 
   analysis <- ddply(
