@@ -27,7 +27,7 @@ select_relevant <- function(observation, observation.species){
     mutate_(
       Sampled = ~ n_distinct(LocationID)
     ) %>%
-    inner_join(observation.species, by = "ObservationID") %>%
+    left_join(observation.species, by = "ObservationID") %>%
     mutate_(
       Count = ~ifelse(is.na(Count), 0, Count)
     ) %>%
@@ -46,6 +46,12 @@ select_relevant <- function(observation, observation.species){
     variable = "LocationID",
     threshold = 1
   )
+  if (nrow(observation.species) == 0) {
+    return(NULL)
+  }
+  observation.species <- observation.species %>%
+    group_by_(~Stratum) %>%
+    filter_(~n_distinct(LocationID) >= 3)
   if (nrow(observation.species) == 0) {
     return(NULL)
   }
