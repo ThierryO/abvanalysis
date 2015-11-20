@@ -12,7 +12,9 @@ result.channel <- n2khelper::connect_result()
 raw.connection <- connect_raw(
   result.channel = result.channel,
   username = username,
-  password = password
+  password = password,
+  commit.user = "abvanalysis",
+  commit.email = "bmk@inbo.be"
 )
 scheme.id <- scheme_id(result.channel)
 prepare_dataset(
@@ -21,7 +23,9 @@ prepare_dataset(
   attribute.connection = connect_attribute(
     result.channel = result.channel,
     username = username,
-    password = password
+    password = password,
+    commit.user = "abvanalysis",
+    commit.email = "bmk@inbo.be"
   ),
   raw.connection = raw.connection,
   scheme.id = scheme.id
