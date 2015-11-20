@@ -2,6 +2,7 @@
 #' @export
 #' @inheritParams prepare_dataset
 #' @importFrom RODBC sqlQuery
+#' @importFrom dplyr %>% mutate_ filter_ group_by_ summarise_ semi_join arrange_ select_
 #' @importFrom lubridate floor_date year
 #' @importFrom n2khelper cut_date
 read_observation <- function(source.channel, result.channel){
@@ -44,22 +45,33 @@ read_observation <- function(source.channel, result.channel){
     ORDER BY
       WRNG_UTM1_CDE, WRNG_DTE_BGN
   ")
-  observation <- sqlQuery(channel = source.channel, query = sql, stringsAsFactors = FALSE)
-  
-  observation$Date <- floor_date(observation$Timestamp, unit = "day")
-  observation$Period <- cut_date(
-    x = observation$Date, 
-    dm = c("1-3", "16-4", "1-6", "16-7"), 
-    include.last = FALSE
-  )
+  observation <- sqlQuery(
+    channel = source.channel,
+    query = sql,
+    stringsAsFactors = FALSE
+  ) %>%
+    mutate_(
+      Date = ~floor_date(Timestamp, unit = "day"),
+      Period = ~cut_date(
+        x = Date,
+        dm = c("1-3", "16-4", "1-6", "16-7"),
+        include.last = FALSE
+      ),
+      Year = ~year(Date),
+      DatasourceID = ~datasource_id(result.channel = result.channel)
+    ) %>%
+    filter_(~!is.na(Period))
+  repeat.visit <- observation %>%
+    group_by_(~ExternalCode) %>%
+    summarise_(nYear = ~n_distinct(Year)) %>%
+    filter_(~nYear > 1)
+  observation <- observation %>%
+    semi_join(repeat.visit, by = "ExternalCode") %>%
+    arrange_(~ObservationID, ~SubExternalCode) %>%
+    select_(
+      ~DatasourceID, ~ObservationID, ~ExternalCode, ~SubExternalCode, ~Year,
+      ~Period
+    )
   levels(observation$Period) <- 1:3
-  observation$Year <- year(observation$Date)
-
-  observation <- observation[!is.na(observation$Period), ]
-  observation$DatasourceID <- datasource_id(result.channel = result.channel)
-  observation <- observation[
-    order(observation$ObservationID, observation$SubExternalCode),
-    c("DatasourceID", "ObservationID", "ExternalCode", "SubExternalCode", "Year", "Period")
-  ]
-  return(observation)  
+  return(observation)
 }
