@@ -10,7 +10,9 @@
 select_relevant <- function(observation, observation.species){
   check_dataframe_variable(
     df = observation,
-    variable = c("ObservationID", "LocationID", "Stratum", "Year", "Period", "Weight"),
+    variable = c(
+      "ObservationID", "LocationID", "Stratum", "Year", "Period", "Weight"
+    ),
     name = "observation"
   )
   check_dataframe_variable(

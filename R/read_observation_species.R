@@ -21,38 +21,38 @@ read_observation_species <- function(species.id, source.channel){
     variable = c("WRME_WRNG_ID", "WRME_PNT", "WRME_ANT", "WRME_SPEC_CDE"),
     channel = source.channel
   )
-  
+
   sql <- paste0("
     SELECT
       visit.ObservationID AS ObservationID,
       observed.Count AS Count
     FROM
         (
-          SELECT 
+          SELECT
             WRPT_ID AS ObservationID,
-            WRNG_ID AS ExternalCode, 
+            WRNG_ID AS ExternalCode,
             WRPT_PTN AS SubExternalCode
-          FROM 
-              tblWaarneming 
-            INNER JOIN 
-              tblWaarnemingPunt 
-            ON 
+          FROM
+              tblWaarneming
+            INNER JOIN
+              tblWaarnemingPunt
+            ON
               tblWaarneming.WRNG_ID = tblWaarnemingPunt.WRPT_WRNG_ID
-          WHERE 
-            WRNG_WRNG_ID IS NULL AND 
-            WRPT_BZT = 1 AND 
-            WRNG_UCWT_CDE IN ('ABV', 'LSABV', 'IJK') AND 
+          WHERE
+            WRNG_WRNG_ID IS NULL AND
+            WRPT_BZT = 1 AND
+            WRNG_UCWT_CDE IN ('ABV', 'LSABV', 'IJK') AND
             WRNG_WGST_CDE <> 'NV'
         ) AS visit
       INNER JOIN
         (
           SELECT
-            WRME_WRNG_ID AS ExternalCode, 
-            Left([WRME_PNT],3) AS SubExternalCode, 
+            WRME_WRNG_ID AS ExternalCode,
+            Left([WRME_PNT],3) AS SubExternalCode,
             Sum(WRME_ANT) AS Count
           FROM
             tblWaarnemingMeting
-          WHERE 
+          WHERE
             WRME_SPEC_CDE = ", species.id, "
           GROUP BY
             WRME_WRNG_ID,
@@ -62,7 +62,11 @@ read_observation_species <- function(species.id, source.channel){
         visit.ExternalCode = observed.ExternalCode AND
         visit.SubExternalCode = observed.SubExternalCode
   ")
-  
-  observed.count <- sqlQuery(channel = source.channel, query = sql, stringsAsFactors = FALSE)
+
+  observed.count <- sqlQuery(
+    channel = source.channel,
+    query = sql,
+    stringsAsFactors = FALSE
+  )
   return(observed.count)
 }
