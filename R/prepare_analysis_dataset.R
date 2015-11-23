@@ -66,17 +66,6 @@ prepare_analysis_dataset <- function(
     variable = c("ObservationID", "Count"),
     name = rawdata.file
   )
-  weights <- read_delim_git(
-    file = paste0("weights_", rawdata.file),
-    connection = raw.connection
-  )
-  check_dataframe_variable(
-    df = weights,
-    variable = c("Stratum", "Weight"),
-    name = rawdata.file
-  )
-  weights <- mutate_(weights, fStratum = ~factor(Stratum)) %>%
-    arrange_(~fStratum)
   analysis.date <- git_recent(
     file = rawdata.file,
     connection = raw.connection
@@ -133,14 +122,6 @@ prepare_analysis_dataset <- function(
       dataset$fStratum <- factor(dataset$Stratum)
       multi.stratum <- length(levels(dataset$fStratum)) > 1
       if (multi.stratum) {
-        stratum.weight <- model.matrix(~0 + fStratum:Weight, data = weights) %>%
-          colSums() %>%
-          t()
-        colnames(stratum.weight) <- gsub(
-          ":Weight$",
-          "",
-          colnames(stratum.weight)
-        )
         design.variable <- "fStratum"
       } else {
         design.variable <- character(0)
@@ -150,26 +131,28 @@ prepare_analysis_dataset <- function(
       dataset$fYear <- factor(dataset$Year)
       if (length(levels(dataset$fYear)) == 1) {
         if (multi.stratum) {
-          trend <- "0 + fStratum"
+          trend <- "1 + f(fStratum, model = \"iid\")"
         } else {
           trend <- "1"
         }
         trend.variable <- "fYear"
       } else {
         dataset$cYear <- dataset$Year - max(dataset$Year)
+        dataset$sYear <- dataset$cYear
         if (multi.stratum) {
           dataset$cStratum <- as.integer(dataset$fStratum)
           design.variable <- list(
-            c(design.variable, "cYear"),
-            design.variable
+            c("fStratum", "sYear", "cStratum"),
+            c("fStratum", "sYear", "cStratum")
           )
           trend <- c(
-            "0 + fStratum + fYear +
-            f(cYear, model = \"rw1\", replicate = as.integer(fStratum))",
-            "0 + fStratum + cYear:fStratum"
+            "0 + fYear + fStratum +
+            f(sYear, model = \"rw1\", replicate = cStratum)",
+            "0 + cYear + fStratum +
+            f(sYear, model = \"rw1\", replicate = cStratum)"
           )
         } else {
-          trend <- c("fYear", "cYear")
+          trend <- c("0 + fYear", "cYear")
         }
         trend.variable <- c("fYear", "cYear")
         cycle.label <- seq(min(dataset$Year), max(dataset$Year), by = 3)
@@ -181,18 +164,21 @@ prepare_analysis_dataset <- function(
           if (multi.stratum) {
             design.variable <- c(
               design.variable,
-              list(c(design.variable[[2]], "cCycle"))
+              list(c("fStratum", "cCycle", "cStratum"))
             )
             trend <- c(
               trend,
-              "0 + fStratum + fCycle +
-              f(cCycle, model = \"rw1\", replicate = as.integer(fStratum))"
+              "0 + fCycle + fStratum +
+              f(cCycle, model = \"rw1\", replicate = cStratum)"
             )
           } else {
-            trend <- c(trend, "fCycle")
+            trend <- c(trend, "0 + fCycle")
           }
           trend.variable <- c(trend.variable, "fCycle")
         }
+      }
+      if (length(design.variable) < length(trend.variable)) {
+        design.variable <- rep(list(design.variable), length(trend.variable))
       }
 
       dataset$fLocation <- factor(dataset$LocationID)
@@ -207,60 +193,15 @@ prepare_analysis_dataset <- function(
         design.variable <- lapply(design.variable, c, "fSubLocation")
       }
 
-      if (multi.stratum) {
-        weight.formula <- paste("~", trend)
-      }
-
       dataset$fPeriod <- factor(dataset$Period)
       if (length(levels(dataset$fPeriod)) > 1) {
         design <- c(design, "fPeriod")
         design.variable <- lapply(design.variable, c, "fPeriod")
-        if (multi.stratum) {
-          weight.formula <- paste(weight.formula, "fPeriod", sep = "+")
-        }
       }
       design <- paste(design, collapse = " + ")
       covariates <- paste(trend, design, sep = " + ")
 
       fingerprint <- do.call(rbind, lapply(seq_along(covariates), function(i){
-        if (multi.stratum) {
-          if (trend.variable[i] == "cYear") {
-            cyear <- c(unique(dataset$cYear), 1)
-            time.fixed <- outer(cyear, stratum.weight[1, ])
-            rownames(time.fixed) <- c(head(cyear, -1), "Trend")
-            colnames(time.fixed) <- paste0(colnames(time.fixed), ":cYear")
-            lc <- cbind(
-              rbind(
-                stratum.weight[rep(1, nrow(time.fixed) - 1), ],
-                0
-              ),
-              time.fixed
-            )
-          } else {
-            time.fixed <- dataset %>%
-              select_(trend.variable[i]) %>%
-              distinct_() %>%
-              model.matrix(object = as.formula(paste("~", trend.variable[i])))
-            rownames(time.fixed) <- levels(dataset[, trend.variable[i]])
-            random <- matrix(
-              weights$Weight,
-              ncol = nrow(time.fixed) * nrow(weights),
-              nrow = nrow(time.fixed)
-            ) * do.call(cbind, rep(list(diag(nrow(time.fixed))), nrow(weights)))
-            colnames(random) <- rep(
-              gsub("^f", "c", trend.variable[i]),
-              ncol(random)
-            )
-            lc <- cbind(
-              stratum.weight[rep(1, nrow(time.fixed)), ],
-              time.fixed[, -1],
-              random
-            )
-          }
-        } else {
-          lc <- NULL
-        }
-
         data <- dataset %>%
           select_(
             ~ObservationID, ~DatasourceID, ~Count,
@@ -283,8 +224,7 @@ prepare_analysis_dataset <- function(
           first.imported.year = first.year,
           last.imported.year = last.year,
           data = data,
-          parent = parent,
-          lin.comb = lc
+          parent = parent
         )
         file.fingerprint <- get_file_fingerprint(analysis)
         filename <- paste0(analysis.path, file.fingerprint, ".rda")
