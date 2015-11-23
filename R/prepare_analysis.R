@@ -8,7 +8,7 @@
 #' @importFrom dplyr inner_join
 #' @importFrom assertthat assert_that is.count
 prepare_analysis <- function(
-  raw.connection, analysis.path = ".", min.observation = 100
+  raw.connection, analysis.path = ".", min.observation = 1
 ){
   assert_that(is.count(min.observation))
   path <- check_path(
