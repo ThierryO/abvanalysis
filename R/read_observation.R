@@ -64,9 +64,10 @@ read_observation <- function(source.channel, result.channel){
     ) %>%
     filter_(~!is.na(Period))
   repeat.visit <- observation %>%
+    mutate_(Cycle = ~(Year - min(Year)) %/% 3) %>%
     group_by_(~ExternalCode) %>%
-    summarise_(nYear = ~n_distinct(Year)) %>%
-    filter_(~nYear > 1)
+    summarise_(nCycle = ~n_distinct(Cycle)) %>%
+    filter_(~nCycle > 1)
   observation <- observation %>%
     semi_join(repeat.visit, by = "ExternalCode") %>%
     arrange_(~ObservationID, ~SubExternalCode) %>%
