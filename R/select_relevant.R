@@ -53,7 +53,8 @@ select_relevant <- function(observation, observation.species){
   }
   observation.species <- observation.species %>%
     group_by_(~Stratum) %>%
-    filter_(~n_distinct(LocationID) >= 3)
+    filter_(~n_distinct(LocationID) >= 3) %>%
+    as.data.frame()
   if (nrow(observation.species) == 0) {
     return(NULL)
   }
